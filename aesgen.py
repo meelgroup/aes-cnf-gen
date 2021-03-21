@@ -154,10 +154,10 @@ def gen_espresso(bit, out_bit_val):
     with open(fname, "w") as f:
         f.write(".i 8\n")
         f.write(".o 1\n")
-        for i in range(128):
+        for i in range(256):
             out_val = (sbox_orig[i]>>bit)&1
             for i2 in range(8):
-                in_val = (sbox_orig[i]>>i2)&1
+                in_val = (i>>i2)&1
                 f.write("%d" % in_val)
 
             f.write(" %d\n" % (out_bit_val == out_val))
@@ -216,18 +216,24 @@ def create_sboxes():
 
 def run_get_solution(fname):
     fname_out = "test.out"
-    os.system("./cryptominisat5 %s > %s" % (fname, fname_out))
+    os.system("./cryptominisat5 %s > %s --maxsol 10000 2>&1" % (fname, fname_out))
     solution = {}
+    num_sat = 0
     with open(fname_out, "r") as f:
         for line in f:
             line = line.strip()
+            if "ERROR" in line:
+                print("Error in CNF?!, file: ", fname)
+                exit(-1)
             if len(line) == 0:
                 continue
             if line[0] == "c":
                 continue
             if line[0] == "s":
-                assert "s SATISFIABLE" in line
+                if "s SATISFIABLE" in line:
+                    num_sat += 1
             if line[0] == "v":
+                assert num_sat == 1
                 for lit in line.split():
                     if lit == "v":
                         continue
@@ -236,30 +242,32 @@ def run_get_solution(fname):
                         continue
                     solution[abs(lit)] = lit > 0
 
+    assert num_sat == 1
     os.unlink(fname_out)
     return solution
 
 
 def test_sbox(at):
+    print("Testing sbox that computes bit %d given input value", at)
     vs = range(1,9)
     out = 9
     final_cls = []
     for cl in sbox[at]:
         this_cl = str(cl)
         for i in range(8):
-            this_cl.replace("x(%d) " % i, "%d " % vs[i])
+            this_cl = this_cl.replace("x(%d) " % i, "%d " % vs[i])
 
-        this_cl.replace("y", "%d 0" % out)
-        print(this_cl)
+        this_cl = this_cl.replace("y", "%d 0" % out)
         final_cls.append(this_cl)
 
     for testval in range(256):
+        print("Testing input value %d" % testval)
         fname = "test.cnf"
         with open(fname, "w") as f:
             for cl in final_cls:
                 f.write(cl+"\n")
             for i in range(8):
-                val = (testval>>k)&1
+                val = (testval>>i)&1
                 if val == 0:
                     f.write("-%d 0\n" % vs[i])
                 else:
@@ -270,14 +278,18 @@ def test_sbox(at):
         # there is only supposed to be a single
         print("Created file %s to check output" % fname)
         solution = run_get_solution(fname)
+        print("solution[out]: ", solution[out])
+        print("expected_val: " , expected_val)
         assert solution[out] == expected_val
+        # TODO check number of solutions! Should be ONE
         os.unlink(fname)
 
 
 if __name__ == "__main__":
     sbox = create_sboxes()
-    print(sbox[0])
-    test_sbox(sbox[0])
+    assert len(sbox) == 8
+    for i in range(8):
+        test_sbox(0)
 
 
 
