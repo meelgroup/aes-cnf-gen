@@ -114,19 +114,24 @@ def ks_expand(key,n=16,b=176):
   i = 1*8
   j = 16*8
   while (j < b):
+    # tmp is 4 bytes, bytes 12...15 in expanded_key
     tmp = list(expanded_key[j-4*8:j])
     tmp = rotate(tmp)
     tmp = np.vectorize(lambda x: sbox[x])(tmp)
 
+    # xor only the 1st byte with rcon
     for k in range(8):
         tmp[k] = binary_invert(tmp[k], (rcon[i/8]>>k)&1)
 
+    # for all bytes
     for k in range(4*8):
-        tmp[k] = do_xor(tmp[k] + [expanded_key[j-n*8+k])
+        tmp[k] = do_xor([tmp[k], expanded_key[j-n*8+k], rhs=False)
 
+    # set 4 bytes
     expanded_key[j:j+4*8] = list(tmp)
 
-    for offset in range(j+4*8, j+16*8):
+    # set 12 more bytes
+    for offset in range(j+4*8, j+16*8, 4*8):
         for k in range(4*8):
               expanded_key[offset+k] = do_xor(expanded_key[offset-n*8+k], tmp[k])
 
