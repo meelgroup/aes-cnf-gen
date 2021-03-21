@@ -243,13 +243,13 @@ class AES:
     def do_xor(self, vs):
         assert type(vs) == list
 
-        tmp = self.v
-        self.v+=1
-
+        tmp = self.get_n_vars(1)[0]
         self.xor_clause(vs+[tmp], False)
         return tmp
 
     def binary_invert(self, lit, inv):
+        assert type(inv) is bool or inv == 0 or inv == 1
+
         if inv:
             return -lit
         else:
@@ -262,6 +262,8 @@ class AES:
             for cl in self.sbox[i]:
                 this_cl = fill_sbox(cl, vs, out)
                 self.cnf.write(this_cl+"\n")
+
+        return outs
 
     # from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
     # expand a 16-byte, i.e. 128b AES key
@@ -279,17 +281,23 @@ class AES:
             tmp = list(expanded_key[j-4*8:j])
             tmp = self.rotate(tmp)
 
-            for j in range(4):
-                tmp[j*8:j*8+8] = self.sbox_clauses(tmp[j*8:j*8+8])
+            for h in range(4):
+                tmp[h*8:h*8+8] = self.sbox_clauses(tmp[h*8:h*8+8])
 
             # xor only the 1st byte with rcon
             for k in range(8):
-                tmp[k] = binary_invert(tmp[k], (rcon[i]>>k)&1)
+                print("i:", i)
+                print("k:", k)
+                print("j:", j)
+                print("b:", b)
+                print("tmp[k]:", tmp[k])
+                print("self.rcon[i]:", self.rcon[i])
+                tmp[k] = self.binary_invert(tmp[k], (self.rcon[i]>>k)&1)
 
             # for all bytes
             # tmp = tmp ^ expanded_key[j-n:j-n+4]; -- where n = 16
             for k in range(4*8):
-                tmp[k] = do_xor([tmp[k], expanded_key[j-128+k]])
+                tmp[k] = self.do_xor([tmp[k], expanded_key[j-128+k]])
 
             # set 4 bytes
             expanded_key[j:j+4*8] = list(tmp)
@@ -297,7 +305,7 @@ class AES:
             # set 12 more bytes
             for offset in range(j+4*8, j+128, 4*8):
                 for k in range(4*8):
-                      expanded_key[offset+k] = do_xor(expanded_key[offset-128+k], tmp[k])
+                      expanded_key[offset+k] = self.do_xor([expanded_key[offset-128+k], tmp[k]])
 
             j += 128
             i += 1
@@ -313,7 +321,7 @@ if __name__ == "__main__":
     # rounds = 10
     aes = AES(sbox)
     aes.add_base_vars()
-    aes.ks_expand(key)
+    aes.ks_expand()
 
 
 
