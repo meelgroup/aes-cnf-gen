@@ -148,7 +148,7 @@ def ks_expand(key,b=16*11):
 # generates truth table that outputs the bit desired,
 # needed to define both 1 and 0 outputs
 def gen_espresso(bit, out_bit_val):
-    fname = "input-bit-%d.esp" % bit
+    fname = "input-bit-%d-outval-%d.esp" % (bit, out_bit_val)
     with open(fname, "w") as f:
         f.write(".i 8\n")
         f.write(".o 1\n")
@@ -168,11 +168,12 @@ def gen_espresso(bit, out_bit_val):
 # the invert option is to allow it to define both 1 and 0 outputs
 def one_espresso_set(fname, invert):
     clauses = []
-    os.system("espresso %s" % fname)
-    with open(fname, "r") as f:
+    out_fname = fname+".out"
+    os.system("./espresso %s > %s" % (fname, out_fname))
+    with open(out_fname, "r") as f:
         for line in f:
             clause = ""
-            line = strip(line)
+            line = line.strip()
             if len(line) == 0:
                 continue
             if line[0] == ".":
@@ -189,6 +190,7 @@ def one_espresso_set(fname, invert):
 
             assert line[9] == "1"
             clause+="%sy" % invert
+            #print("line: '%s', clause: %s" % (line, clause))
             clauses.append(clause)
 
 
@@ -200,8 +202,8 @@ def create_sboxes():
     sbox = []
     for bit in range(8):
         fname = {}
-        for val in range(0,1):
-            fname[val] = gen_espresso(bit)
+        for val in range(2):
+            fname[val] = gen_espresso(bit, val)
 
         clauses = one_espresso_set(fname[1], "")
         clauses.extend(one_espresso_set(fname[0], "-"))
