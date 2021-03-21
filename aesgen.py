@@ -141,3 +141,38 @@ def ks_expand(key,b=16*11):
   return expanded_key
 
 
+# let's use https://github.com/classabbyamp/espresso-logic
+# to generate S-box
+# It's effectively 8 functions, each f(8bits) -> 1 bit output
+def gen_espresso(bit):
+    fname = "input-bit-%d.esp" % bit
+    with open(fname, "w") as f:
+        f.write(".i 8\n")
+        f.write(".o 1\n")
+        for i in range(128):
+            out_val = (sbox[i]>>bit)&1
+            for i2 in range(8):
+                in_val = (sbox[i]>>i2)&1
+                f.write("%d" % in_val)
+
+            f.write(" %d\n" % out_val)
+        f.write(".e\n")
+
+    print("Wrote file %s" % fname)
+
+if __name__ == "__main__":
+    for bit in range(8):
+        gen_espresso(bit)
+
+
+
+
+
+
+
+
+
+
+
+
+
