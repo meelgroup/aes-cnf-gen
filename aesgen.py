@@ -99,7 +99,7 @@ class SBoxGen:
                 f.write(" %d\n" % (out_bit_val == out_val))
             f.write(".e\n")
 
-        print("Wrote file %s" % fname)
+        #print("Wrote file %s" % fname)
         return fname
 
     # generate set of clauses based on output of espresso
@@ -135,6 +135,7 @@ class SBoxGen:
         return clauses
 
     def create_sboxes(self):
+        print("Creating SBoxes using espresso...")
         # variables are going to be x0..x7, output: y
         sbox = []
         for bit in range(8):
@@ -146,6 +147,10 @@ class SBoxGen:
             clauses.extend(self.one_espresso_set(fname[0], "-"))
             sbox.append(clauses)
 
+            for val in range(2):
+                os.unlink(fname[val])
+
+        print("Done.")
         return sbox
 
 
@@ -196,22 +201,23 @@ class AES:
         self.v = 0
         self.cnf = open("mycnf.cnf", "w")
 
-    def add_base_vars():
-        self.key = list(range(v, v+128))
-        self.v+=128
+    def get_n_vars(self, n):
+        ret = list(range(self.v, self.v+n))
+        self.v += n
 
-        self.plaintext = list(range(v, v+128))
-        self.v+=128
+        return ret
 
-        ciphertext = list(range(v, v+128))
-        self.v+=128
+    def add_base_vars(self):
+        self.key = self.get_n_vars(128)
+        self.plaintext = self.get_n_vars(128)
+        self.ciphertext = self.get_n_vars(128)
 
-    def rotate(v):
-      assert len(v) == 4*8
+    def rotate(self, tmp):
+      assert len(tmp) == 4*8
 
-      ret = [0]*len(v)
-      ret[0:3*8] = v[1*8:]
-      ret[3*8:] = v[0:1*8]
+      ret = [0]*len(tmp)
+      ret[0:3*8] = list(tmp[1*8:])
+      ret[3*8:] = list(tmp[0:1*8])
 
       return ret
 
@@ -237,8 +243,9 @@ class AES:
     def do_xor(self, vs):
         assert type(vs) == list
 
-        tmp = v
+        tmp = self.v
         self.v+=1
+
         self.xor_clause(vs+[tmp], False)
         return tmp
 
@@ -249,28 +256,25 @@ class AES:
             return lit
 
     def sbox_clauses(self, vs):
-        outs = list(range(v, v+8))
-        self.v+=8
-
+        outs = self.get_n_vars(8)
         for i in range(8):
             out = outs[i]
-            for cl in sbox[i]:
+            for cl in self.sbox[i]:
                 this_cl = fill_sbox(cl, vs, out)
                 self.cnf.write(this_cl+"\n")
 
     # from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
     # expand a 16-byte, i.e. 128b AES key
-    # 10-round AES, with 1 extra round needed at the end, hence 16*11 bytes
-    def ks_expand(b=16*11):
-        expanded_key = list(range(v, v+b*8))
-        self.v+=b
+    # 10-round AES, with 1 extra round needed at the end, hence 128*11 bits
+    def ks_expand(self, b=128*11):
+        expanded_key = self.get_n_vars(b)
 
         #set the first 16 bytes to the original key
-        expanded_key[0:16*8] = list(self.key)
-        #continue adding 16 bytes until b bytes have been generated
+        expanded_key[0:128] = list(self.key)
+        #continue adding 16 bytes until b bits have been generated
         i = 1
-        j = 16*8
-        while (j < b*8):
+        j = 128
+        while (j < b):
             # tmp is 4 bytes (i.e. 32 bits), bytes 12...15 in expanded_key
             tmp = list(expanded_key[j-4*8:j])
             tmp = self.rotate(tmp)
@@ -285,17 +289,17 @@ class AES:
             # for all bytes
             # tmp = tmp ^ expanded_key[j-n:j-n+4]; -- where n = 16
             for k in range(4*8):
-                tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k]], rhs=False)
+                tmp[k] = do_xor([tmp[k], expanded_key[j-128+k]])
 
             # set 4 bytes
             expanded_key[j:j+4*8] = list(tmp)
 
             # set 12 more bytes
-            for offset in range(j+4*8, j+16*8, 4*8):
+            for offset in range(j+4*8, j+128, 4*8):
                 for k in range(4*8):
-                      expanded_key[offset+k] = do_xor(expanded_key[offset-16*8+k], tmp[k])
+                      expanded_key[offset+k] = do_xor(expanded_key[offset-128+k], tmp[k])
 
-            j += 16*8
+            j += 128
             i += 1
 
         return expanded_key
@@ -303,7 +307,7 @@ class AES:
 
 if __name__ == "__main__":
     sboxgen = SBoxGen()
-    sboxgen.test()
+    #sboxgen.test()
     sbox = sboxgen.create_sboxes()
 
     # rounds = 10
