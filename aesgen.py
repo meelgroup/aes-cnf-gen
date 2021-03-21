@@ -126,7 +126,7 @@ def ks_expand(key,b=16*11):
 
     # for all bytes
     for k in range(4*8):
-        tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k], rhs=False)
+        tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k]], rhs=False)
 
     # set 4 bytes
     expanded_key[j:j+4*8] = list(tmp)
@@ -144,7 +144,10 @@ def ks_expand(key,b=16*11):
 # let's use https://github.com/classabbyamp/espresso-logic
 # to generate S-box
 # It's effectively 8 functions, each f(8bits) -> 1 bit output
-def gen_espresso(bit):
+
+# generates truth table that outputs the bit desired,
+# needed to define both 1 and 0 outputs
+def gen_espresso(bit, out_bit_val):
     fname = "input-bit-%d.esp" % bit
     with open(fname, "w") as f:
         f.write(".i 8\n")
@@ -155,14 +158,65 @@ def gen_espresso(bit):
                 in_val = (sbox[i]>>i2)&1
                 f.write("%d" % in_val)
 
-            f.write(" %d\n" % out_val)
+            f.write(" %d\n" % (out_bit_val == out_val))
         f.write(".e\n")
 
     print("Wrote file %s" % fname)
+    return fname
+
+# generate set of clauses based on output of espresso
+# the invert option is to allow it to define both 1 and 0 outputs
+def one_espresso_set(fname, invert):
+    clauses = []
+    os.system("espresso %s" % fname)
+    with open(fname, "r") as f:
+        for line in f:
+            clause = ""
+            line = strip(line)
+            if len(line) == 0:
+                continue
+            if line[0] == ".":
+                continue
+            assert len(line) == 8+1+1
+            for i in range(8):
+                if line[i] == "-":
+                    continue
+                assert line[i] == "0" or line[i] == "1"
+                if line[i] == "0":
+                    clause+="x(%d) " % i
+                else:
+                    clause+="-x(%d) " % i
+
+            assert line[9] == "1"
+            clause+="%sy" % invert
+            clauses.append(clause)
+
+
+    return clauses
+
+
+def create_sboxes():
+    # variables are going to be x0..x7, output: y
+    sbox = []
+    for bit in range(8):
+        fname = {}
+        for val in range(0,1):
+            fname[val] = gen_espresso(bit)
+
+        clauses = one_espresso_set(fname[1], "")
+        clauses.extend(one_espresso_set(fname[0], "-"))
+        sbox.append(clauses)
+
+    return sbox
 
 if __name__ == "__main__":
-    for bit in range(8):
-        gen_espresso(bit)
+    sbox = create_sboxes()
+    print(sbox[0])
+
+
+
+
+
 
 
 
