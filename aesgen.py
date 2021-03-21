@@ -60,88 +60,6 @@ sbox_orig = [0x63, 0x7C, 0x77, 0x7B, 0xF2, 0x6B, 0x6F, 0xC5, 0x30, 0x01, 0x67, 0
 
 rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
 
-def rotate(v):
-  assert len(v) == 4*8
-
-  ret = [0]*len(v)
-  ret[0:3*8] = v[1*8:]
-  ret[3*8:] = v[0:1*8]
-
-  return ret
-
-
-def xor_clause(vs, rhs):
-    assert type(vs) == list
-
-    toprint = "x"
-    for i in range(len(vs)):
-        # default rhs is TRUE
-        if i == 0:
-            if not rhs:
-                toprint+="%d " % -vs[i]
-            else:
-                toprint+="%d " % vs[i]
-        else:
-            toprint+="%d " % vs[i]
-
-    toprint +="0"
-    print(toprint)
-
-
-def do_xor(vs):
-    assert type(vs) == list
-
-    tmp = v
-    v+=1
-    xor_clause(vs+[tmp], False)
-    return tmp
-
-def binary_invert(v, inv):
-    if inv:
-        return -v
-    else:
-        return v
-
-# from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
-# expand a 16-byte, i.e. 128b AES key
-# 10-round AES, with 1 extra round needed at the end, hence 16*11 bytes
-def ks_expand(key,b=16*11):
-  expanded_key = list(range(v, v+b*8))
-  v+=b
-
-  #set the first 16 bytes to the original key
-  expanded_key[0:16*8] = key
-  #continue adding 16 bytes until b bytes have been generated
-  i = 1*8
-  j = 16*8
-  while (j < b*8):
-    # tmp is 4 bytes, bytes 12...15 in expanded_key
-    tmp = list(expanded_key[j-4*8:j])
-    tmp = rotate(tmp)
-
-    # TODO fix!!!!
-    tmp = np.vectorize(lambda x: sbox_orig[x])(tmp)
-
-    # xor only the 1st byte with rcon
-    for k in range(8):
-        tmp[k] = binary_invert(tmp[k], (rcon[i/8]>>k)&1)
-
-    # for all bytes
-    for k in range(4*8):
-        tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k]], rhs=False)
-
-    # set 4 bytes
-    expanded_key[j:j+4*8] = list(tmp)
-
-    # set 12 more bytes
-    for offset in range(j+4*8, j+16*8, 4*8):
-        for k in range(4*8):
-              expanded_key[offset+k] = do_xor(expanded_key[offset-16*8+k], tmp[k])
-
-    j += 16*8;
-    i += 1*8;
-  return expanded_key
-
 
 # let's use https://github.com/classabbyamp/espresso-logic
 # to generate S-box
@@ -283,6 +201,90 @@ def test_sbox(at):
         assert solution[out] == expected_val
         # TODO check number of solutions! Should be ONE
         os.unlink(fname)
+
+
+
+def rotate(v):
+  assert len(v) == 4*8
+
+  ret = [0]*len(v)
+  ret[0:3*8] = v[1*8:]
+  ret[3*8:] = v[0:1*8]
+
+  return ret
+
+
+def xor_clause(vs, rhs):
+    assert type(vs) == list
+
+    toprint = "x"
+    for i in range(len(vs)):
+        # default rhs is TRUE
+        if i == 0:
+            if not rhs:
+                toprint+="%d " % -vs[i]
+            else:
+                toprint+="%d " % vs[i]
+        else:
+            toprint+="%d " % vs[i]
+
+    toprint +="0"
+    print(toprint)
+
+
+def do_xor(vs):
+    assert type(vs) == list
+
+    tmp = v
+    v+=1
+    xor_clause(vs+[tmp], False)
+    return tmp
+
+def binary_invert(v, inv):
+    if inv:
+        return -v
+    else:
+        return v
+
+# from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
+# expand a 16-byte, i.e. 128b AES key
+# 10-round AES, with 1 extra round needed at the end, hence 16*11 bytes
+def ks_expand(key,b=16*11):
+  expanded_key = list(range(v, v+b*8))
+  v+=b
+
+  #set the first 16 bytes to the original key
+  expanded_key[0:16*8] = key
+  #continue adding 16 bytes until b bytes have been generated
+  i = 1*8
+  j = 16*8
+  while (j < b*8):
+    # tmp is 4 bytes, bytes 12...15 in expanded_key
+    tmp = list(expanded_key[j-4*8:j])
+    tmp = rotate(tmp)
+
+    # TODO fix!!!!
+    tmp = np.vectorize(lambda x: sbox_orig[x])(tmp)
+
+    # xor only the 1st byte with rcon
+    for k in range(8):
+        tmp[k] = binary_invert(tmp[k], (rcon[i/8]>>k)&1)
+
+    # for all bytes
+    for k in range(4*8):
+        tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k]], rhs=False)
+
+    # set 4 bytes
+    expanded_key[j:j+4*8] = list(tmp)
+
+    # set 12 more bytes
+    for offset in range(j+4*8, j+16*8, 4*8):
+        for k in range(4*8):
+              expanded_key[offset+k] = do_xor(expanded_key[offset-16*8+k], tmp[k])
+
+    j += 16*8;
+    i += 1*8;
+  return expanded_key
 
 
 if __name__ == "__main__":
