@@ -103,8 +103,9 @@ def binary_invert(v, inv):
         return v
 
 # from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
-# expand a 16-byte AES key
-def ks_expand(key,n=16,b=176):
+# expand a 16-byte, i.e. 128b AES key
+# 10-round AES, with 1 extra round needed at the end, hence 16*11 bytes
+def ks_expand(key,b=16*11):
   expanded_key = list(range(v, v+b*8))
   v+=b
 
@@ -113,7 +114,7 @@ def ks_expand(key,n=16,b=176):
   #continue adding 16 bytes until b bytes have been generated
   i = 1*8
   j = 16*8
-  while (j < b):
+  while (j < b*8):
     # tmp is 4 bytes, bytes 12...15 in expanded_key
     tmp = list(expanded_key[j-4*8:j])
     tmp = rotate(tmp)
@@ -125,7 +126,7 @@ def ks_expand(key,n=16,b=176):
 
     # for all bytes
     for k in range(4*8):
-        tmp[k] = do_xor([tmp[k], expanded_key[j-n*8+k], rhs=False)
+        tmp[k] = do_xor([tmp[k], expanded_key[j-16*8+k], rhs=False)
 
     # set 4 bytes
     expanded_key[j:j+4*8] = list(tmp)
@@ -133,7 +134,7 @@ def ks_expand(key,n=16,b=176):
     # set 12 more bytes
     for offset in range(j+4*8, j+16*8, 4*8):
         for k in range(4*8):
-              expanded_key[offset+k] = do_xor(expanded_key[offset-n*8+k], tmp[k])
+              expanded_key[offset+k] = do_xor(expanded_key[offset-16*8+k], tmp[k])
 
     j += 16*8;
     i += 1*8;
