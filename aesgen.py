@@ -42,11 +42,12 @@ def fill_sbox(cl, vs, out):
     this_cl.replace("--", "")
     return this_cl
 
-def get_one_sat_solution(fname):
+def get_n_sat_solutions(fname, num):
     fname_out = "test.out"
-    os.system("./cryptominisat5 %s > %s --maxsol 10000 2>&1" % (fname, fname_out))
-    solution = {}
+    os.system("./cryptominisat5 %s > %s --maxsol %d 2>&1" % (fname, fname_out, num))
+    solutions = []
     num_sat = 0
+    solution_found = False
     with open(fname_out, "r") as f:
         for line in f:
             line = line.strip()
@@ -59,7 +60,11 @@ def get_one_sat_solution(fname):
                 continue
             if line[0] == "s":
                 if "s SATISFIABLE" in line:
+                    if solution_found:
+                        solutions.append(solution)
                     num_sat += 1
+                    solution = {}
+                    solution_found = True
             if line[0] == "v":
                 assert num_sat == 1
                 for lit in line.split():
@@ -70,9 +75,11 @@ def get_one_sat_solution(fname):
                         continue
                     solution[abs(lit)] = lit > 0
 
-    assert num_sat == 1
+    if solution_found:
+        solutions.append(solution)
+
     os.unlink(fname_out)
-    return solution
+    return solutions
 
 class SBoxGen:
     def __init__(self):
@@ -180,7 +187,9 @@ class SBoxGen:
             # 'out' is supposed to take value
             # there is only supposed to be a single
             print("Created file %s to check output" % fname)
-            solution = get_one_sat_solution(fname)
+            solutions = get_n_sat_solutions(fname, 1000)
+            assert len(solutions) == 1
+            solution = solutions[0]
             print("solution[out]: ", solution[out])
             print("expected_val: " , expected_val)
             assert solution[out] == expected_val
@@ -227,7 +236,7 @@ class AES:
     def __init__(self, sbox, fname):
         self.sbox = sbox
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
-        self.v = 0
+        self.v = 1
         self.cnf = open(fname, "w")
 
     def get_n_vars(self, n):
@@ -295,6 +304,10 @@ class AES:
         return outs
 
 
+    # NOTE: first 192 are OK, rest are wrong
+    # 192-128 = 64 bits are OK, i.e. 8 bytes
+
+
     # from https://github.com/agohr/ches2018/blob/master/sources/aes_ks.py
     # expand a 16-byte, i.e. 128b AES key
     # 10-round AES, with 1 extra round needed at the end, hence 128*11 bits
@@ -335,7 +348,8 @@ class AES:
             # set 12 more bytes
             for offset in range(j+4*8, j+128, 4*8):
                 for k in range(4*8):
-                      expanded_key[offset+k] = self.do_xor([expanded_key[offset-128+k], tmp[k]])
+                    tmp[k] = self.do_xor([expanded_key[offset-128+k], tmp[k]])
+                    expanded_key[offset+k] = tmp[k]
 
             j += 128
             i += 1
@@ -343,47 +357,61 @@ class AES:
         return expanded_key
 
 
+def test_key_expansion(sbox):
+    key = []
+    for i in range(16):
+        byte = random.getrandbits(8)
+        key.append(byte)
+    print("Key is: ", key)
+
+    norm = AESNormKS()
+    good_exp_key = norm.ks_expand(key)
+    print("Extended key is: ", good_exp_key)
+
+
+    # create aes.cnf to get extended key
+    fname = "aes.cnf"
+    aes = AES(sbox, fname)
+    aes.add_base_vars()
+    expanded_key_vars = aes.ks_expand()
+    #print("expanded_key_vars:", expanded_key_vars)
+    assert len(expanded_key_vars) == 8*len(good_exp_key)
+
+    # add key to CNF and get solution
+    for i in range(128):
+        v = ((key[i//8])>>(i%8))&1
+        #print("Key bit %s is %s" % (i, v))
+        if v:
+            aes.cnf.write("%d 0\n" % aes.key[i])
+        else:
+            aes.cnf.write("-%d 0\n" % aes.key[i])
+    aes.cnf.close()
+    solutions = get_n_sat_solutions(fname, 1)
+    assert len(solutions) == 1
+    solution = solutions[0]
+
+    # check solution
+    # bint 19
+    for i in range(8*len(good_exp_key)):
+        v = expanded_key_vars[i]
+        value = solution[v]
+        good_value = (good_exp_key[i//8]>>(i%8))&1
+        #print("value     :", value)
+        #print("good value:", good_value)
+        if good_value != value:
+            print("At bit: %d incorrect value" % i)
+        assert good_value == value
+
+    print("Test OK")
+
 if __name__ == "__main__":
     sboxgen = SBoxGen()
     #sboxgen.test()
+    random.seed(1)
+    sboxgen = SBoxGen()
     sbox = sboxgen.create_sboxes()
-
     for test_no in range(100):
-        random.seed(1)
-        key = []
-        for i in range(16):
-            byte = random.getrandbits(8)
-            key.append(byte)
-        print("Key is: ", key)
-
-        norm = AESNormKS()
-        good_exp_key = norm.ks_expand(key)
-        print("Extended key is: ", good_exp_key)
-
-        fname = "aes.cnf"
-        aes = AES(sbox, fname)
-        aes.add_base_vars()
-        expanded_key_vars = aes.ks_expand()
-        assert len(expanded_key_vars) == 8*len(good_exp_key)
-
-        for i in range(128):
-            v = (key[i/8])>>(i%8)
-            if v:
-                aes.cnf.write("%d 0" % aes.key[i])
-            else:
-                aes.cnf.write("-%d 0" % aes.key[i])
-
-        aes.cnf.close()
-        solution = get_one_sat_solution(fname)
-
-        found_exp_key = []
-        for i in range(len(good_exp_key*8)):
-            v = expanded_key_vars[i]
-            value = solution[v]
-            good_value = good_exp_key[i/8]>>(i%8)
-            assert good_value == value
-
-
+        test_key_expansion(sbox)
 
 
 
