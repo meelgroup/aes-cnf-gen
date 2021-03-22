@@ -31,6 +31,8 @@ import sys
 import time
 import random
 import numpy as np
+import aes as otheraes
+import codecs
 
 
 def fill_sbox(cl, vs, out):
@@ -232,7 +234,7 @@ class AESNormKS:
       return(expanded_key);
 
 
-class AES:
+class AESSAT:
     def __init__(self, sbox, fname):
         self.sbox = sbox
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
@@ -367,11 +369,21 @@ def test_key_expansion(sbox):
     norm = AESNormKS()
     good_exp_key = norm.ks_expand(key)
     print("Extended key is: ", good_exp_key)
+    crypt = otheraes.AES_128()
+    crypt.key = [chr(c) for c in key]
+    plaintext = ['a']*16
+    crypt.cipher(plaintext)
+    check_keys = crypt.key_schedule()
+    assert len(check_keys) == len(good_exp_key)
+    for i in range(len(check_keys)):
+        assert check_keys[i] == good_exp_key[i]
+    print("AESNormKS vs otheraes.AES_128 test OK")
+
 
 
     # create aes.cnf to get extended key
     fname = "aes.cnf"
-    aes = AES(sbox, fname)
+    aes = AESSAT(sbox, fname)
     aes.add_base_vars()
     expanded_key_vars = aes.ks_expand()
     #print("expanded_key_vars:", expanded_key_vars)
