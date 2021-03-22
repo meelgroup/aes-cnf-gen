@@ -240,6 +240,20 @@ class AESSAT:
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
         self.v = 1
         self.cnf = open(fname, "w")
+        for f in (0x02, 0x03, 0x0e, 0x0b, 0x0d, 0x09):
+            self.Gmul[f] = tuple(AESSAT.gmul(f, x) for x in range(0,0x100))
+
+    @staticmethod
+    def gmul(a, b):
+        p = 0
+        for c in range(8):
+            if b & 1:
+                p ^= a
+            a <<= 1
+            if a & 0x100:
+                a ^= 0x11b
+            b >>= 1
+        return p
 
     def get_n_vars(self, n):
         ret = list(range(self.v, self.v+n))
@@ -359,6 +373,78 @@ class AESSAT:
         return expanded_key
 
 
+    def add_round_key(self, state, rkey):
+        assert len(state) == 128
+        assert len(rkey) == 128
+
+        ret = []
+        for i, b in enumerate(rkey):
+            ret.append(self.do_xor(state[i], b))
+
+        return ret
+
+    def sub_bytes(self, state):
+        assert len(state) == 128
+
+        ret = []
+        for s in state:
+            ret.append(sbox_clauses(state[i]))
+
+        return ret
+
+    def shift_rows(self, state):
+        assert len(state) == 128
+
+        rows = []
+        for r in range(4):
+            rows.append( state[r::4] )
+            rows[r] = rows[r][r:] + rows[r][:r]
+        ret = [ r[c] for c in range(4) for r in rows ]
+
+        assert len(ret) == 128
+        return ret
+
+    def mix_columns(self, state):
+        assert len(state) == 128
+
+        ss = []
+        for c in range(4):
+            col = state[c*4:(c+1)*4]
+            ss.extend([
+                self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
+                col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
+                col[0]  ^ col[1] ^ self.Gmul[0x02][col[2]] ^ self.Gmul[0x03][col[3]],
+                self.Gmul[0x03][col[0]] ^ col[1]  ^ col[2]  ^ self.Gmul[0x02][col[3]],
+            ])
+
+        return ss
+
+    def cipher(self, ptext):
+        #print "round[ 0].input: {0}".format(block.encode('hex'))
+        n = 16
+        state = list(ptext)
+        keys = self.ks_expand()
+        #print "round[ 0].k_sch: {0}".format(keys[0:n].encode('hex'))
+        self.add_round_key(keys[0:n])
+        for r in range(1, 10):
+            #print "round[{0}].start: {1}".format(r,self.state.encode('hex'))
+            state = self.sub_bytes(state)
+            #print "round[{0}].s_box: {1}".format(r,self.state.encode('hex'))
+            state = self.shift_rows(state)
+            #print "round[{0}].s_row: {1}".format(r,self.state.encode('hex'))
+            state = self.mix_columns(state)
+            #print "round[{0}].m_col: {1}".format(r,self.state.encode('hex'))
+            k = keys[r*n:(r+1)*n]
+            #print "round[{0}].k_sch: {1}".format(r,k.encode('hex'))
+            state = self.add_round_key(state, k)
+
+        state = self.sub_bytes(state)
+        state = self.shift_rows(state)
+        state = self.add_round_key(state, keys[10*n:])
+        #print "output: {0}".format(self.state.encode('hex'))
+        return self.state
+
+
 def test_key_expansion(sbox):
     key = []
     for i in range(16):
@@ -418,8 +504,8 @@ def test_key_expansion(sbox):
 
 if __name__ == "__main__":
     sboxgen = SBoxGen()
-    #sboxgen.test()
-    random.seed(1)
+    sboxgen.test()
+    random.seed(4)
     sboxgen = SBoxGen()
     sbox = sboxgen.create_sboxes()
     for test_no in range(100):
