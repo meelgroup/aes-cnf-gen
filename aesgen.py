@@ -418,7 +418,7 @@ class AESSAT:
         state = self.shift_rows(state)
         state = self.add_round_key(state, keys[10*128:])
         #print "output: {0}".format(self.state.encode('hex'))
-        return self.state
+        return state
 
 
 def test_key_expansion(sbox):
