@@ -388,12 +388,13 @@ class AESSAT:
 
         ret = []
         for i in range(16):
-            ret.extend(sbox_clauses(state[i*8:(i+1)*8]))
+            ret.extend(self.sbox_clauses(state[i*8:(i+1)*8]))
 
         return ret
 
     # TODO fix, this is BYTE ordered, not bit-ordered
     #       i.e. "state" below is expected to contain 16x8 bit integers
+    #       but that's not how we operate
     def shift_rows(self, state):
         assert False, "TODO fix"
         assert len(state) == 128
@@ -409,6 +410,7 @@ class AESSAT:
 
     # TODO fix, this is BYTE ordered, not bit-ordered
     #       i.e. "state" below is expected to contain 16x8 bit integers
+    #       also, this is not yet using self.sbox_clauses and self.do_xor
     def mix_columns(self, state):
         assert False, "TODO fix"
         assert len(state) == 128
