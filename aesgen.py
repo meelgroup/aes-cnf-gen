@@ -387,12 +387,15 @@ class AESSAT:
         assert len(state) == 128
 
         ret = []
-        for s in state:
-            ret.append(sbox_clauses(state[i]))
+        for i in range(16):
+            ret.extend(sbox_clauses(state[i*8:(i+1)*8]))
 
         return ret
 
+    # TODO fix, this is BYTE ordered, not bit-ordered
+    #       i.e. "state" below is expected to contain 16x8 bit integers
     def shift_rows(self, state):
+        assert False, "TODO fix"
         assert len(state) == 128
 
         rows = []
@@ -404,14 +407,15 @@ class AESSAT:
         assert len(ret) == 128
         return ret
 
+    # TODO fix, this is BYTE ordered, not bit-ordered
+    #       i.e. "state" below is expected to contain 16x8 bit integers
     def mix_columns(self, state):
+        assert False, "TODO fix"
         assert len(state) == 128
 
         ss = []
         for c in range(4):
             col = state[c*4:(c+1)*4]
-            # TODO below!!!
-            assert False, "TODO BELOW"
             ss.extend([
                 self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
                 col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
@@ -427,22 +431,17 @@ class AESSAT:
         state = list(ptext)
         keys = self.ks_expand()
         #print "round[ 0].k_sch: {0}".format(keys[0:n].encode('hex'))
-        self.add_round_key(keys[0:n])
+        self.add_round_key(keys[0:128])
         for r in range(1, 10):
-            #print "round[{0}].start: {1}".format(r,self.state.encode('hex'))
             state = self.sub_bytes(state)
-            #print "round[{0}].s_box: {1}".format(r,self.state.encode('hex'))
             state = self.shift_rows(state)
-            #print "round[{0}].s_row: {1}".format(r,self.state.encode('hex'))
             state = self.mix_columns(state)
-            #print "round[{0}].m_col: {1}".format(r,self.state.encode('hex'))
-            k = keys[r*n:(r+1)*n]
-            #print "round[{0}].k_sch: {1}".format(r,k.encode('hex'))
+            k = keys[r*128:(r+1)*128]
             state = self.add_round_key(state, k)
 
         state = self.sub_bytes(state)
         state = self.shift_rows(state)
-        state = self.add_round_key(state, keys[10*n:])
+        state = self.add_round_key(state, keys[10*128:])
         #print "output: {0}".format(self.state.encode('hex'))
         return self.state
 
