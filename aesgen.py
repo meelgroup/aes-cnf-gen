@@ -240,6 +240,7 @@ class AESSAT:
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
         self.v = 1
         self.cnf = open(fname, "w")
+        self.Gmul = {}
         for f in (0x02, 0x03):
             self.Gmul[f] = tuple(AESSAT.gmul(f, x) for x in range(0,0x100))
 
@@ -449,12 +450,14 @@ class AESSAT:
 
 
 def test_key_expansion(sbox):
+    # generate random key
     key = []
     for i in range(16):
         byte = random.getrandbits(8)
         key.append(byte)
     print("Key is: ", key)
 
+    # get correct expanded keystream from 2 different implementations
     norm = AESNormKS()
     good_exp_key = norm.ks_expand(key)
     print("Extended key is: ", good_exp_key)
@@ -468,9 +471,7 @@ def test_key_expansion(sbox):
         assert check_keys[i] == good_exp_key[i]
     print("AESNormKS vs otheraes.AES_128 test OK")
 
-
-
-    # create aes.cnf to get extended key
+    # create aes.cnf to get extended key variables
     fname = "aes.cnf"
     aes = AESSAT(sbox, fname)
     aes.add_base_vars()
@@ -478,7 +479,7 @@ def test_key_expansion(sbox):
     #print("expanded_key_vars:", expanded_key_vars)
     assert len(expanded_key_vars) == 8*len(good_exp_key)
 
-    # add key to CNF and get solution
+    # add key to CNF and get solution, i.e. extended key variable values
     for i in range(128):
         v = ((key[i//8])>>(i%8))&1
         #print("Key bit %s is %s" % (i, v))
@@ -491,8 +492,7 @@ def test_key_expansion(sbox):
     assert len(solutions) == 1
     solution = solutions[0]
 
-    # check solution
-    # bint 19
+    # check solution, i.e. extended key variable values in CNF against correct values
     for i in range(8*len(good_exp_key)):
         v = expanded_key_vars[i]
         value = solution[v]
