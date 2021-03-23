@@ -410,6 +410,8 @@ class AESSAT:
         ss = []
         for c in range(4):
             col = state[c*4:(c+1)*4]
+            # TODO below!!!
+            assert False, "TODO BELOW"
             ss.extend([
                 self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
                 col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
