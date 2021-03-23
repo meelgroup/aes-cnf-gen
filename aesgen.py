@@ -219,14 +219,14 @@ class SBoxGen:
 
 
 class AESSAT:
-    def __init__(self, sbox, fname):
+    def __init__(self, sbox, sbox_gmul2, sbox_gmul3, fname):
         self.sbox = sbox
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
         self.v = 1
         self.cnf = open(fname, "w")
-        self.Gmul = {}
-        for f in (0x02, 0x03):
-            self.Gmul[f] = tuple(AESSAT.gmul(f, x) for x in range(0,0x100))
+        self.sbox_clauses =
+        self.sbox_gmul2 = sbox_gmul2
+        self.sbox_gmul3 = sbox_gmul3
 
     @staticmethod
     def gmul(a, b):
@@ -294,11 +294,11 @@ class AESSAT:
         else:
             return lit
 
-    def sbox_clauses(self, vs):
+    def sbox_clauses(self, vs, sbox):
         outs = self.get_n_vars(8)
         for i in range(8):
             out = outs[i]
-            for cl in self.sbox[i]:
+            for cl in sbox[i]:
                 this_cl = fill_sbox(cl, vs, out)
                 self.cnf.write(this_cl+"\n")
 
@@ -326,7 +326,7 @@ class AESSAT:
             tmp = self.rotate(tmp)
 
             for h in range(4):
-                tmp[h*8:h*8+8] = self.sbox_clauses(tmp[h*8:h*8+8])
+                tmp[h*8:h*8+8] = self.sbox_clauses(tmp[h*8:h*8+8], self.sbox)
 
             # xor only the 1st byte with rcon
             for k in range(8):
@@ -373,7 +373,7 @@ class AESSAT:
 
         ret = []
         for i in range(16):
-            ret.extend(self.sbox_clauses(state[i*8:(i+1)*8]))
+            ret.extend(self.sbox_clauses(state[i*8:(i+1)*8], self.sbox))
 
         return ret
 
@@ -395,7 +395,6 @@ class AESSAT:
 
     # TODO fix, this is BYTE ordered, not bit-ordered
     #       i.e. "state" below is expected to contain 16x8 bit integers
-    #       also, this is not yet using self.sbox_clauses and self.do_xor
     def mix_columns(self, state):
         assert False, "TODO fix"
         assert len(state) == 128
@@ -403,12 +402,28 @@ class AESSAT:
         ss = []
         for c in range(4):
             col = state[c*4:(c+1)*4]
-            ss.extend([
-                self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
-                col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
-                col[0]  ^ col[1] ^ self.Gmul[0x02][col[2]] ^ self.Gmul[0x03][col[3]],
-                self.Gmul[0x03][col[0]] ^ col[1]  ^ col[2]  ^ self.Gmul[0x02][col[3]],
-            ])
+            #ss.extend([
+                #self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
+                #col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
+                #col[0]  ^ col[1] ^ self.Gmul[0x02][col[2]] ^ self.Gmul[0x03][col[3]],
+                #self.Gmul[0x03][col[0]] ^ col[1]  ^ col[2]  ^ self.Gmul[0x02][col[3]],
+            #])
+            tmp1 = self.sbox_clauses(col[0], self.gmul_sbox2)
+            tmp2 = self.sbox_clauses(col[1], self.gmul_sbox3)
+            ss.append(self.do_xor([tmp1, tmp2, col[2], col[3]]))
+
+            tmp1 = self.sbox_clauses(col[1], self.gmul_sbox2)
+            tmp2 = self.sbox_clauses(col[2], self.gmul_sbox3)
+            ss.append(self.do_xor([col[0], tmp1, tmp2, col[3]]))
+
+            tmp1 = self.sbox_clauses(col[2], self.gmul_sbox2)
+            tmp2 = self.sbox_clauses(col[3], self.gmul_sbox3)
+            ss.append(self.do_xor([col[0], col[1], tmp1, tmp2]))
+
+            tmp1 = self.sbox_clauses(col[0], self.gmul_sbox3)
+            tmp2 = self.sbox_clauses(col[3], self.gmul_sbox2)
+            ss.append(self.do_xor([tmp1, col[1], col[2], tmp2]))
+
 
         return ss
 
