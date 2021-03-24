@@ -566,6 +566,9 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
     # set values and solve
     aes.write_data(aes.key, key)
     aes.write_data(aes.plaintext, ptext)
+    print("Key vars:" , aes.key)
+    print("Plaintex vars: ", aes.plaintext)
+    print("Ciphertext vars: ", cnf_ciphertext)
     aes.cnf.close()
     solutions = get_n_sat_solutions(fname, 1)
     assert len(solutions) == 1
@@ -587,12 +590,12 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
 
 
 if __name__ == "__main__":
+    random.seed(40)
     if False:
         sboxgen = SBoxGen()
         sboxgen.test()
 
     if True:
-        random.seed(4)
         sboxgen = SBoxGen()
         sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
         for test_no in range(5):
