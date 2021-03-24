@@ -224,9 +224,9 @@ class AESSAT:
         self.rcon = [0x8d, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36, 0x6c, 0xd8, 0xab, 0x4d, 0x9a]
         self.v = 1
         self.cnf = open(fname, "w")
-        self.sbox_clauses =
         self.sbox_gmul2 = sbox_gmul2
         self.sbox_gmul3 = sbox_gmul3
+        self.add_base_vars()
 
     @staticmethod
     def gmul(a, b):
@@ -249,7 +249,6 @@ class AESSAT:
     def add_base_vars(self):
         self.key = self.get_n_vars(128)
         self.plaintext = self.get_n_vars(128)
-        self.ciphertext = self.get_n_vars(128)
 
     def rotate(self, tmp):
       assert len(tmp) == 4*8
@@ -381,7 +380,8 @@ class AESSAT:
 
         ret = []
         for i, b in enumerate(rkey):
-            ret.append(self.do_xor(state[i], b))
+            xored = self.do_xor([state[i], b])
+            ret.append(xored)
 
         return ret
 
@@ -400,11 +400,10 @@ class AESSAT:
             if isinstance(element, int):
                 result_array.append(element)
             elif isinstance(element, list):
-                result_array += flatten(element)
+                result_array += self.flatten(element)
         return result_array
 
     def shift_rows(self, state):
-        assert False, "TODO fix"
         assert len(state) == 128
 
         # making state2 into bytes
@@ -420,7 +419,7 @@ class AESSAT:
         ret = [ r[c] for c in range(4) for r in rows ]
         assert len(ret) == 16
 
-        ret_flat = flatten(ret)
+        ret_flat = self.flatten(ret)
         assert len(ret_flat) == 128
         return ret_flat
 
@@ -435,20 +434,20 @@ class AESSAT:
             for i in range(4):
                 col.append(col_bytes[i*8:(i+1)*8])
 
-            tmp1 = self.sbox_clauses(col[0], self.gmul_sbox2)
-            tmp2 = self.sbox_clauses(col[1], self.gmul_sbox3)
+            tmp1 = self.sbox_clauses(col[0], self.sbox_gmul2)
+            tmp2 = self.sbox_clauses(col[1], self.sbox_gmul3)
             ss.extend(self.do_xor_byte([tmp1, tmp2, col[2], col[3]]))
 
-            tmp1 = self.sbox_clauses(col[1], self.gmul_sbox2)
-            tmp2 = self.sbox_clauses(col[2], self.gmul_sbox3)
+            tmp1 = self.sbox_clauses(col[1], self.sbox_gmul2)
+            tmp2 = self.sbox_clauses(col[2], self.sbox_gmul3)
             ss.extend(self.do_xor_byte([col[0], tmp1, tmp2, col[3]]))
 
-            tmp1 = self.sbox_clauses(col[2], self.gmul_sbox2)
-            tmp2 = self.sbox_clauses(col[3], self.gmul_sbox3)
+            tmp1 = self.sbox_clauses(col[2], self.sbox_gmul2)
+            tmp2 = self.sbox_clauses(col[3], self.sbox_gmul3)
             ss.extend(self.do_xor_byte([col[0], col[1], tmp1, tmp2]))
 
-            tmp1 = self.sbox_clauses(col[0], self.gmul_sbox3)
-            tmp2 = self.sbox_clauses(col[3], self.gmul_sbox2)
+            tmp1 = self.sbox_clauses(col[0], self.sbox_gmul3)
+            tmp2 = self.sbox_clauses(col[3], self.sbox_gmul2)
             ss.extend(self.do_xor_byte([tmp1, col[1], col[2], tmp2]))
 
         assert len(ss) == 128
@@ -459,8 +458,7 @@ class AESSAT:
         n = 16
         state = list(ptext)
         keys = self.ks_expand()
-        #print "round[ 0].k_sch: {0}".format(keys[0:n].encode('hex'))
-        self.add_round_key(keys[0:128])
+        state = self.add_round_key(state, keys[0:128])
         for r in range(1, 10):
             state = self.sub_bytes(state)
             state = self.shift_rows(state)
@@ -473,6 +471,17 @@ class AESSAT:
         state = self.add_round_key(state, keys[10*128:])
         #print "output: {0}".format(self.state.encode('hex'))
         return state
+
+    def write_data(self, vs, value):
+        # add value to CNF for variables vs
+        for i in range(128):
+            v = ((value[i//8])>>(i%8))&1
+            #print("Key bit %s is %s" % (i, v))
+            if v:
+                self.cnf.write("%d 0\n" % vs[i])
+            else:
+                self.cnf.write("-%d 0\n" % vs[i])
+
 
 
 def test_key_expansion(sbox):
@@ -499,20 +508,13 @@ def test_key_expansion(sbox):
 
     # create aes.cnf to get extended key variables
     fname = "aes.cnf"
-    aes = AESSAT(sbox, fname)
-    aes.add_base_vars()
+    aes = AESSAT(sbox, None, None, fname)
     expanded_key_vars = aes.ks_expand()
     #print("expanded_key_vars:", expanded_key_vars)
     assert len(expanded_key_vars) == 8*len(good_exp_key)
 
     # add key to CNF and get solution, i.e. extended key variable values
-    for i in range(128):
-        v = ((key[i//8])>>(i%8))&1
-        #print("Key bit %s is %s" % (i, v))
-        if v:
-            aes.cnf.write("%d 0\n" % aes.key[i])
-        else:
-            aes.cnf.write("-%d 0\n" % aes.key[i])
+    aes.write_data(aes.key, key)
     aes.cnf.close()
     solutions = get_n_sat_solutions(fname, 1)
     assert len(solutions) == 1
@@ -531,15 +533,76 @@ def test_key_expansion(sbox):
 
     print("Test OK")
 
-if __name__ == "__main__":
-    sboxgen = SBoxGen()
-    #sboxgen.test()
 
-    random.seed(4)
+def test_aes(sbox, sbox_gmul2, sbox_gmul3):
+    # generate random key
+    key = []
+    for i in range(16):
+        byte = random.getrandbits(8)
+        key.append(byte)
+    print("Key is: ", key)
+
+
+    # generate random ptext
+    ptext = []
+    for i in range(16):
+        byte = random.getrandbits(8)
+        ptext.append(byte)
+    print("Ptext is: ", ptext)
+
+    # set up and run normal AES
+    crypt = otheraes.AES_128()
+    crypt.key = [chr(c) for c in key]
+    tmp_ptext = [chr(c) for c in ptext]
+    ctext = crypt.cipher(tmp_ptext)
+    assert len(ctext) == 16 # returns 16 integers (all bytes)
+
+    # initialize SAT engine
+    fname = "aes.cnf"
+    aes = AESSAT(sbox, sbox_gmul2, sbox_gmul3, fname)
+    cnf_ciphertext = aes.cipher(aes.plaintext)
+
+    # set values and solve
+    aes.write_data(aes.key, key)
+    aes.write_data(aes.plaintext, ptext)
+    aes.cnf.close()
+    solutions = get_n_sat_solutions(fname, 1)
+    assert len(solutions) == 1
+    solution = solutions[0]
+
+    # check solution, i.e. ciphertext
+    for i in range(128):
+        v = cnf_ciphertext[i]
+        value = solution[v]
+
+        good_value = (ctext[i//8]>>(i%8))&1
+        #print("value     :", value)
+        #print("good value:", good_value)
+        if good_value != value:
+            print("At bit: %d incorrect value" % i)
+        assert good_value == value
+
+    print("Test OK")
+
+
+if __name__ == "__main__":
+    if False:
+        sboxgen = SBoxGen()
+        sboxgen.test()
+
+    if False:
+        random.seed(4)
+        sboxgen = SBoxGen()
+        sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
+        for test_no in range(20):
+            test_key_expansion(sbox)
+
     sboxgen = SBoxGen()
+    sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
+    sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
     sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-    for test_no in range(20):
-        test_key_expansion(sbox)
+    for i in range(100):
+        test_aes(sbox, sbox_gmul2, sbox_gmul3)
 
 
 

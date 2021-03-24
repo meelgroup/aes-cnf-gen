@@ -191,7 +191,7 @@ class AES_128(AES):
             self.Gmul[f] = tuple(AES.gmul(f, x) for x in range(0,0x100))
             #print("Gmul[f]:", self.Gmul[f])
 
-def hex_to_ints(val):
+def hex_to_chars(val):
     ret = []
     assert len(val)%2 == 0
     for i in range(len(val)//2):
@@ -201,7 +201,7 @@ def hex_to_ints(val):
 
 if __name__=="__main__":
     # for these constants, see: https://www.iso.org/obp/ui/#iso:std:iso-iec:10116:ed-3:v1:en
-    key = hex_to_ints("2b7e151628aed2a6abf7158809cf4f3c")
+    key = hex_to_chars("2b7e151628aed2a6abf7158809cf4f3c")
     check = (
             ("6bc1bee22e409f96e93d7e117393172a", "3ad77bb40d7a3660a89ecaf32466ef97"),
             ("ae2d8a571e03ac9c9eb76fac45af8e51", "f5d3d58503b9699de785895a96fdbaaf"),
@@ -211,8 +211,8 @@ if __name__=="__main__":
     crypt = AES_128()
     crypt.key = key
     for c in check:
-        p = hex_to_ints(c[0])
-        v = [ord(v) for v in hex_to_ints(c[1])]
+        p = hex_to_chars(c[0])
+        v = [ord(v) for v in hex_to_chars(c[1])]
         t = crypt.cipher(p)
         if t == v:
             print("yay!")
