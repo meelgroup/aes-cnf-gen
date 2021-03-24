@@ -555,6 +555,7 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
     crypt.key = [chr(c) for c in key]
     tmp_ptext = [chr(c) for c in ptext]
     ctext = crypt.cipher(tmp_ptext)
+    print("ctext is: ", ctext)
     assert len(ctext) == 16 # returns 16 integers (all bytes)
 
     # initialize SAT engine
@@ -597,12 +598,13 @@ if __name__ == "__main__":
         for test_no in range(20):
             test_key_expansion(sbox)
 
-    sboxgen = SBoxGen()
-    sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
-    sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
-    sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-    for i in range(100):
-        test_aes(sbox, sbox_gmul2, sbox_gmul3)
+    if True:
+        sboxgen = SBoxGen()
+        sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
+        sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
+        sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
+        for i in range(10):
+            test_aes(sbox, sbox_gmul2, sbox_gmul3)
 
 
 
