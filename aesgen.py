@@ -329,10 +329,10 @@ class AESSAT:
     # expand a 16-byte, i.e. 128b AES key
     # 10-round AES, with 1 extra round needed at the end, hence 128*11 bits
     def ks_expand(self, b=128*11):
-        expanded_key = self.get_n_vars(b)
+        expanded_key = list(self.key) + [0]*(b-128)
 
         #set the first 16 bytes to the original key
-        expanded_key[0:128] = list(self.key)
+        #expanded_key[0:128] = list(self.key)
         #continue adding 16 bytes until b bits have been generated
         i = 1
         j = 128
@@ -591,11 +591,11 @@ if __name__ == "__main__":
         sboxgen = SBoxGen()
         sboxgen.test()
 
-    if False:
+    if True:
         random.seed(4)
         sboxgen = SBoxGen()
         sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-        for test_no in range(20):
+        for test_no in range(5):
             test_key_expansion(sbox)
 
     if True:
@@ -603,7 +603,7 @@ if __name__ == "__main__":
         sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
         sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
         sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-        for i in range(10):
+        for i in range(5):
             test_aes(sbox, sbox_gmul2, sbox_gmul3)
 
 
