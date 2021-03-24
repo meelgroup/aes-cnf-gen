@@ -286,6 +286,21 @@ class AESSAT:
         self.xor_clause(vs+[tmp], False)
         return tmp
 
+    def do_xor_byte(self, vs):
+        assert type(vs) == list
+        for v in vs:
+            assert type(v) == list
+            assert len(v) == 8
+
+        tmp = self.get_n_vars(8)
+        for i in range(8):
+            toxor = []
+            toxor.append(tmp[i])
+            for v in vs:
+                toxor.append(v[i])
+            self.xor_clause(toxor, False)
+        return tmp
+
     def binary_invert(self, lit, inv):
         assert type(inv) is bool or inv == 0 or inv == 1
 
@@ -295,6 +310,8 @@ class AESSAT:
             return lit
 
     def sbox_clauses(self, vs, sbox):
+        assert len(vs) == 8
+
         outs = self.get_n_vars(8)
         for i in range(8):
             out = outs[i]
@@ -400,31 +417,30 @@ class AESSAT:
         assert len(state) == 128
 
         ss = []
+        # runs 4*(4 bytes) = 16 bytes = 128b state
         for c in range(4):
-            col = state[c*4:(c+1)*4]
-            #ss.extend([
-                #self.Gmul[0x02][col[0]] ^ self.Gmul[0x03][col[1]] ^ col[2]  ^ col[3] ,
-                #col[0]  ^ self.Gmul[0x02][col[1]] ^ self.Gmul[0x03][col[2]] ^ col[3] ,
-                #col[0]  ^ col[1] ^ self.Gmul[0x02][col[2]] ^ self.Gmul[0x03][col[3]],
-                #self.Gmul[0x03][col[0]] ^ col[1]  ^ col[2]  ^ self.Gmul[0x02][col[3]],
-            #])
+            col = []
+            col_bytes = state[c*4*8:(c+1)*4*8]
+            for i in range(4):
+                col.append(col_bytes[i*8:(i+1)*8])
+
             tmp1 = self.sbox_clauses(col[0], self.gmul_sbox2)
             tmp2 = self.sbox_clauses(col[1], self.gmul_sbox3)
-            ss.append(self.do_xor([tmp1, tmp2, col[2], col[3]]))
+            ss.extend(self.do_xor_byte([tmp1, tmp2, col[2], col[3]]))
 
             tmp1 = self.sbox_clauses(col[1], self.gmul_sbox2)
             tmp2 = self.sbox_clauses(col[2], self.gmul_sbox3)
-            ss.append(self.do_xor([col[0], tmp1, tmp2, col[3]]))
+            ss.extend(self.do_xor_byte([col[0], tmp1, tmp2, col[3]]))
 
             tmp1 = self.sbox_clauses(col[2], self.gmul_sbox2)
             tmp2 = self.sbox_clauses(col[3], self.gmul_sbox3)
-            ss.append(self.do_xor([col[0], col[1], tmp1, tmp2]))
+            ss.extend(self.do_xor_byte([col[0], col[1], tmp1, tmp2]))
 
             tmp1 = self.sbox_clauses(col[0], self.gmul_sbox3)
             tmp2 = self.sbox_clauses(col[3], self.gmul_sbox2)
-            ss.append(self.do_xor([tmp1, col[1], col[2], tmp2]))
+            ss.extend(self.do_xor_byte([tmp1, col[1], col[2], tmp2]))
 
-
+        assert len(ss) == 128
         return ss
 
     def cipher(self, ptext):
