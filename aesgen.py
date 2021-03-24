@@ -32,8 +32,8 @@ import time
 import random
 import numpy as np
 import aes as otheraes
-import codecs
 import aesnormks
+import optparse
 
 
 def fill_sbox(cl, vs, out):
@@ -50,6 +50,7 @@ def get_n_sat_solutions(fname, num):
     os.system("./cryptominisat5 %s > %s --maxsol %d 2>&1" % (fname, fname_out, num))
     solutions = []
     num_sat = 0
+    num_unsat = 0
     solution_found = False
     with open(fname_out, "r") as f:
         for line in f:
@@ -68,6 +69,12 @@ def get_n_sat_solutions(fname, num):
                     num_sat += 1
                     solution = {}
                     solution_found = True
+                    continue
+
+                if "s UNSAT" in line:
+                    num_unsat += 1
+                    continue
+
             if line[0] == "v":
                 assert num_sat == 1
                 for lit in line.split():
@@ -77,6 +84,9 @@ def get_n_sat_solutions(fname, num):
                     if lit == 0:
                         continue
                     solution[abs(lit)] = lit > 0
+                continue
+
+            print("ERROR! This line is unrecognized: %s" % line)
 
     if solution_found:
         solutions.append(solution)
@@ -472,15 +482,22 @@ class AESSAT:
         #print "output: {0}".format(self.state.encode('hex'))
         return state
 
-    def write_data(self, vs, value):
+
+    def set_1b_cnf(self, v, value):
+        assert type(v) == int
+
+        if value:
+            self.cnf.write("%d 0\n" % v)
+        else:
+            self.cnf.write("-%d 0\n" % v)
+
+    def set_128b_cnf(self, vs, value):
+        assert len(vs) == 128
+
         # add value to CNF for variables vs
         for i in range(128):
-            v = ((value[i//8])>>(i%8))&1
-            #print("Key bit %s is %s" % (i, v))
-            if v:
-                self.cnf.write("%d 0\n" % vs[i])
-            else:
-                self.cnf.write("-%d 0\n" % vs[i])
+            val_bit = ((value[i//8])>>(i%8))&1
+            self.set_1b_cnf(vs[i], val_bit)
 
 
 
@@ -514,7 +531,7 @@ def test_key_expansion(sbox):
     assert len(expanded_key_vars) == 8*len(good_exp_key)
 
     # add key to CNF and get solution, i.e. extended key variable values
-    aes.write_data(aes.key, key)
+    aes.set_128b_cnf(aes.key, key)
     aes.cnf.close()
     solutions = get_n_sat_solutions(fname, 1)
     assert len(solutions) == 1
@@ -564,11 +581,11 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
     cnf_ciphertext = aes.cipher(aes.plaintext)
 
     # set values and solve
-    aes.write_data(aes.key, key)
-    aes.write_data(aes.plaintext, ptext)
-    print("Key vars:" , aes.key)
-    print("Plaintex vars: ", aes.plaintext)
-    print("Ciphertext vars: ", cnf_ciphertext)
+    aes.set_128b_cnf(aes.key, key)
+    aes.set_128b_cnf(aes.plaintext, ptext)
+    #print("Key vars:" , aes.key)
+    #print("Plaintex vars: ", aes.plaintext)
+    #print("Ciphertext vars: ", cnf_ciphertext)
     aes.cnf.close()
     solutions = get_n_sat_solutions(fname, 1)
     assert len(solutions) == 1
@@ -589,25 +606,128 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
     print("Test OK")
 
 
+def generate_problem(key_bits, fname, sbox, sbox_gmul2, sbox_gmul3):
+    # generate random key
+    key = []
+    for i in range(16):
+        byte = random.getrandbits(8)
+        key.append(byte)
+    print("Key is: ", key)
+
+
+    # generate random ptext
+    ptext = []
+    for i in range(16):
+        byte = random.getrandbits(8)
+        ptext.append(byte)
+    print("Ptext is: ", ptext)
+
+    # set up and run normal AES
+    crypt = otheraes.AES_128()
+    crypt.key = [chr(c) for c in key]
+    tmp_ptext = [chr(c) for c in ptext]
+    ctext = crypt.cipher(tmp_ptext)
+    print("ctext is: ", ctext)
+    assert len(ctext) == 16 # returns 16 integers (all bytes)
+
+    # initialize SAT engine
+    aes = AESSAT(sbox, sbox_gmul2, sbox_gmul3, fname)
+    cnf_ciphertext = aes.cipher(aes.plaintext)
+
+    # set guessed key values
+    myvars = list(aes.key)
+    random.shuffle(myvars)
+    myvars = myvars[:key_bits]
+    myvars_val = []
+    for v in myvars:
+        val = random.randrange(0,2)
+        myvars_val.append(val)
+        aes.set_1b_cnf(v, val)
+
+    # set plaintext
+    aes.set_128b_cnf(aes.plaintext, ptext)
+
+    #set ciphertext
+    for i in range(128):
+        v = cnf_ciphertext[i]
+        ctext_bit = (ctext[i//8]>>(i%8))&1
+        aes.set_1b_cnf(v, ctext_bit)
+
+    # solve
+    print("Key vars set:" , myvars)
+    print("Key vars set to: ", myvars_val)
+    assert len(myvars) == key_bits
+    assert len(myvars_val) == key_bits
+
+    print("Plaintex: ", ptext)
+    print("Ciphertext: ", ctext)
+    aes.cnf.close()
+    #solutions = get_n_sat_solutions(fname, 1)
+    #print("Solutions: ", len(solutions))
+
+
+class PlainHelpFormatter(optparse.IndentedHelpFormatter):
+
+    def format_description(self, description):
+        if description:
+            return description + "\n"
+        else:
+            return ""
+
 if __name__ == "__main__":
     random.seed(40)
-    if False:
-        sboxgen = SBoxGen()
-        sboxgen.test()
+    sboxgen = SBoxGen()
+    sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
+    sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
+    sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
 
-    if True:
-        sboxgen = SBoxGen()
-        sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-        for test_no in range(5):
+    usage = usage = "usage: %prog [options] KEYBITS FILE"
+    desc = """Generate AES cipher with K randomly picked, randomly set keys, and a valid plaintext and ciphertext combination, given a randomly picked key and plaintext."""
+    parser = optparse.OptionParser(usage=usage, description=desc,
+                                   formatter=PlainHelpFormatter())
+
+    parser.add_option("--verbose", "-v", action="store_true", default=False,
+                      dest="verbose", help="Print more output")
+
+    parser.add_option("--sboxtest", action="store_true", default=False,
+                      dest="sbox_test", help="Test sboxes and exit")
+
+    parser.add_option("--keyexptest", action="store_true", default=False,
+                      dest="key_expansion_test", help="Test key expansion")
+    parser.add_option("--aestest", action="store_true", default=False,
+                      dest="aes_test", help="Test the full AES by giving valid key+plaintext and checking ciphertext")
+
+    parser.add_option("--seed", dest="seed",
+                      help="Seed for generating keys bits, vars to give, etc.",
+                      type=int)
+
+    (options, args) = parser.parse_args()
+
+    if options.sbox_test:
+        sboxgen.test()
+        exit(0)
+
+    if options.key_expansion_test:
+        for test_no in range(20):
             test_key_expansion(sbox)
 
-    if True:
-        sboxgen = SBoxGen()
-        sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
-        sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
-        sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-        for i in range(5):
+        exit(0)
+
+    if options.aes_test:
+        for i in range(20):
             test_aes(sbox, sbox_gmul2, sbox_gmul3)
+
+        exit(0)
+
+    if len(args) != 3:
+        print("Must pass filename and number of key bits to give")
+
+    key_bits = int(args[0])
+    fname = str(args[1])
+
+    print("Giving %d key bits, putting into file '%s'" % (key_bits, fname))
+    random.seed(options.seed)
+    generate_problem(key_bits, fname, sbox, sbox_gmul2, sbox_gmul3)
 
 
 
