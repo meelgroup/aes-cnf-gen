@@ -1,0 +1,5 @@
+*.cnf
+*.out
+cryptominisat5
+espresso
+__py*
