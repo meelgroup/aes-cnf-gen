@@ -394,26 +394,37 @@ class AESSAT:
 
         return ret
 
-    # TODO fix, this is BYTE ordered, not bit-ordered
-    #       i.e. "state" below is expected to contain 16x8 bit integers
-    #       but that's not how we operate
+    def flatten(self, input_array):
+        result_array = []
+        for element in input_array:
+            if isinstance(element, int):
+                result_array.append(element)
+            elif isinstance(element, list):
+                result_array += flatten(element)
+        return result_array
+
     def shift_rows(self, state):
         assert False, "TODO fix"
         assert len(state) == 128
 
+        # making state2 into bytes
+        state2 = []
+        for i in range(16):
+            state2.append(state[i*8:(i+1)*8])
+
+        # run original algorithm to rotate
         rows = []
         for r in range(4):
-            rows.append( state[r::4] )
+            rows.append( state2[r::4] )
             rows[r] = rows[r][r:] + rows[r][:r]
         ret = [ r[c] for c in range(4) for r in rows ]
+        assert len(ret) == 16
 
-        assert len(ret) == 128
-        return ret
+        ret_flat = flatten(ret)
+        assert len(ret_flat) == 128
+        return ret_flat
 
-    # TODO fix, this is BYTE ordered, not bit-ordered
-    #       i.e. "state" below is expected to contain 16x8 bit integers
     def mix_columns(self, state):
-        assert False, "TODO fix"
         assert len(state) == 128
 
         ss = []
