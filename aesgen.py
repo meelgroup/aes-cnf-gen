@@ -34,6 +34,7 @@ import numpy as np
 import aes as otheraes
 import aesnormks
 import optparse
+import pickle
 
 
 def fill_sbox(cl, vs, out):
@@ -500,7 +501,6 @@ class AESSAT:
             self.set_1b_cnf(vs[i], val_bit)
 
 
-
 def test_key_expansion(sbox):
     # generate random key
     key = []
@@ -583,9 +583,9 @@ def test_aes(sbox, sbox_gmul2, sbox_gmul3):
     # set values and solve
     aes.set_128b_cnf(aes.key, key)
     aes.set_128b_cnf(aes.plaintext, ptext)
-    #print("Key vars:" , aes.key)
-    #print("Plaintex vars: ", aes.plaintext)
-    #print("Ciphertext vars: ", cnf_ciphertext)
+    print("Key vars:" , aes.key)
+    print("Plaintex vars: ", aes.plaintext)
+    print("Ciphertext vars: ", cnf_ciphertext)
     aes.cnf.close()
     solutions = get_n_sat_solutions(fname, 1)
     assert len(solutions) == 1
@@ -640,7 +640,7 @@ def generate_problem(key_bits, fname, sbox, sbox_gmul2, sbox_gmul3):
     myvars = myvars[:key_bits]
     myvars_val = []
     for v in myvars:
-        val = random.randrange(0,2)
+        val = random.randint(0, 1)
         myvars_val.append(val)
         aes.set_1b_cnf(v, val)
 
@@ -675,12 +675,6 @@ class PlainHelpFormatter(optparse.IndentedHelpFormatter):
             return ""
 
 if __name__ == "__main__":
-    random.seed(40)
-    sboxgen = SBoxGen()
-    sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
-    sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
-    sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
-
     usage = usage = "usage: %prog [options] KEYBITS FILE"
     desc = """Generate AES cipher with K randomly picked, randomly set keys, and a valid plaintext and ciphertext combination, given a randomly picked key and plaintext."""
     parser = optparse.OptionParser(usage=usage, description=desc,
@@ -688,39 +682,68 @@ if __name__ == "__main__":
 
     parser.add_option("--verbose", "-v", action="store_true", default=False,
                       dest="verbose", help="Print more output")
-
     parser.add_option("--sboxtest", action="store_true", default=False,
                       dest="sbox_test", help="Test sboxes and exit")
-
+    parser.add_option("--gensboxes", action="store_true", default=False,
+                      dest="gen_sboxes", help="Generate S-boxes. If not set, pickled sboxes must be present.")
     parser.add_option("--keyexptest", action="store_true", default=False,
                       dest="key_expansion_test", help="Test key expansion")
     parser.add_option("--aestest", action="store_true", default=False,
                       dest="aes_test", help="Test the full AES by giving valid key+plaintext and checking ciphertext")
-
     parser.add_option("--seed", dest="seed",
                       help="Seed for generating keys bits, vars to give, etc.",
                       type=int)
-
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
         sboxgen.test()
         exit(0)
 
+    if options.gen_sboxes:
+        random.seed(40)
+        sboxgen = SBoxGen()
+        sbox = sboxgen.create_sboxes(sboxgen.sbox_orig)
+        sbox_gmul2 = sboxgen.create_sboxes(sboxgen.Gmul[0x02])
+        sbox_gmul3 = sboxgen.create_sboxes(sboxgen.Gmul[0x03])
+        with open("sbox.pickle", "wb") as f:
+            pickle.dump(sbox, f)
+
+        with open("sbox_gmul2.pickle", "wb") as f:
+            pickle.dump(sbox_gmul2, f)
+
+        with open("sbox_gmul3.pickle", "wb") as f:
+            pickle.dump(sbox_gmul3, f)
+
+        print("Generated s-box pickle files")
+        exit(0)
+    else:
+        with open("sbox.pickle", "rb") as f:
+            sbox = pickle.load(f)
+
+        with open("sbox_gmul2.pickle", "rb") as f:
+            sbox_gmul2 = pickle.load(f)
+
+        with open("sbox_gmul3.pickle", "rb") as f:
+            sbox_gmul3 = pickle.load(f)
+
+
     if options.key_expansion_test:
         for test_no in range(20):
             test_key_expansion(sbox)
-
         exit(0)
 
     if options.aes_test:
         for i in range(20):
             test_aes(sbox, sbox_gmul2, sbox_gmul3)
-
         exit(0)
 
-    if len(args) != 3:
-        print("Must pass filename and number of key bits to give")
+    if len(args) < 2:
+        print("ERROR! Must pass [number of key bits] and [filename] to generate AES problem into")
+        exit(-1)
+
+    if len(args) > 2:
+        print("ERROR! You gave too many positional options. You must give exactly 2!")
+        exit(-1)
 
     key_bits = int(args[0])
     fname = str(args[1])
@@ -728,6 +751,7 @@ if __name__ == "__main__":
     print("Giving %d key bits, putting into file '%s'" % (key_bits, fname))
     random.seed(options.seed)
     generate_problem(key_bits, fname, sbox, sbox_gmul2, sbox_gmul3)
+    print("AES generated with random %d key bits set randomly with a randomly picked plaintext, and a correct ciphertext for a randomly generated key is in file '%s'" % (key_bits, fname))
 
 
 
