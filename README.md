@@ -7,13 +7,14 @@ To gnerate a CNF file, simply execute:
 ```
 
 Which will generate a file that:
-- Has `NUM_KEYBITS` key bits randomly picked from the 128 key bits, and set to random values
+- Has `NUM_KEYBITS` key bits randomly picked from the 128 key bits, and set to random values.
+- If you want the key variables to be set correctly (and hence generate a guaranteed satisfiable problem), set the option `--sat`
 - Has a randomly picked `plaintext` set
 - Has a randomly picked key that is used to encrypt `plaintext` and set as the ciphertext
 - All the above randomness' seed can be set by setting `SEED`
 - The CNF output is in `output.cnf`
 
-As the `NUM_KEYBITS` gets smaller and smaller, the generated CNF file gets harder and harder to solve. Note that as `NUM_KEYBITS` approaches 128, the problem is extremely likley to be UNSAT.
+As the `NUM_KEYBITS` gets smaller and smaller, the generated CNF file gets harder and harder to solve. Note that as `NUM_KEYBITS` approaches 128, the problem is extremely likley to be UNSAT unless you gave the `--sat` option
 
 # How to test and generate sboxes
 
