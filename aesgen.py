@@ -640,7 +640,11 @@ def generate_problem(key_bits, fname, sbox, sbox_gmul2, sbox_gmul3):
     myvars = myvars[:key_bits]
     myvars_val = []
     for v in myvars:
-        val = random.randint(0, 1)
+        if not options.satisfiable:
+            val = random.randint(0, 1)
+        else:
+            bit = v-1 # NOTE: relies on key being 1...129 of self.v's
+            val = (key[bit//8]>>(bit%8)) & 1
         myvars_val.append(val)
         aes.set_1b_cnf(v, val)
 
@@ -693,6 +697,8 @@ if __name__ == "__main__":
     parser.add_option("--seed", dest="seed",
                       help="Seed for generating keys bits, vars to give, etc.",
                       type=int)
+    parser.add_option("--sat", action="store_true", default=False,
+                      dest="satisfiable", help="Make the problem SAT by giving the correct key bit values")
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
