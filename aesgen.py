@@ -700,6 +700,8 @@ if __name__ == "__main__":
                       dest="satisfiable", help="Make the problem SAT by giving the correct key bit values")
     parser.add_option("--rounds", type=int, default=10,
                       dest="rounds", help="Number of rounds to run AES")
+    parser.add_option("--printsboxes", action="store_true", default=False,
+                      dest="print_sboxes", help="Print sboxes and exit")
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
@@ -733,6 +735,12 @@ if __name__ == "__main__":
         with open("sbox_gmul3.pickle", "rb") as f:
             sbox_gmul3 = pickle.load(f)
 
+    if options.print_sboxes:
+        for i in range(8):
+            print("sbox ", i)
+            for cl in sbox[i]:
+                print(cl)
+        exit(0)
 
     if options.key_expansion_test:
         for test_no in range(20):
