@@ -50,6 +50,7 @@ def get_n_sat_solutions(fname, num):
     num_sat = 0
     num_unsat = 0
     solution_found = False
+    solution = None
     with open(fname_out, "r") as f:
         for line in f:
             line = line.strip()
@@ -63,6 +64,7 @@ def get_n_sat_solutions(fname, num):
             if line[0] == "s":
                 if "s SATISFIABLE" in line:
                     if solution_found:
+                        assert solution is not None
                         solutions.append(solution)
                     num_sat += 1
                     solution = {}
@@ -81,6 +83,7 @@ def get_n_sat_solutions(fname, num):
                     lit = int(lit)
                     if lit == 0:
                         continue
+                    assert solution is not None
                     solution[abs(lit)] = lit > 0
                 continue
 
