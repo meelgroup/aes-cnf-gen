@@ -45,7 +45,7 @@ def fill_sbox(cl, vs, out):
 
 def get_n_sat_solutions(fname, num):
     fname_out = "test.out"
-    os.system("./cryptominisat5 %s > %s --maxsol %d 2>&1" % (fname, fname_out, num))
+    os.system("./cryptominisat5 --maxsol %d %s > %s 2>&1" % (num, fname, fname_out))
     solutions = []
     num_sat = 0
     num_unsat = 0
@@ -702,6 +702,7 @@ if __name__ == "__main__":
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
+        sboxgen = SBoxGen()
         sboxgen.test()
         exit(0)
 
