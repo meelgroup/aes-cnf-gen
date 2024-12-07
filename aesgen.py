@@ -699,6 +699,8 @@ if __name__ == "__main__":
                       dest="rounds", help="Number of rounds to run AES")
     parser.add_option("--printsboxes", action="store_true", default=False,
                       dest="print_sboxes", help="Print sboxes and exit")
+    parser.add_option("--printgmul", action="store_true", default=False,
+                      dest="print_gmul", help="Print column multiplication via gmul and exit")
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
@@ -737,6 +739,13 @@ if __name__ == "__main__":
         for i in range(8):
             print("sbox ", i)
             for cl in sbox[i]:
+                print(cl)
+        exit(0)
+
+    if options.print_gmul:
+        for i in range(8):
+            print("sbox ", i)
+            for cl in sbox_gmul2[i]:
                 print(cl)
         exit(0)
 
