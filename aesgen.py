@@ -466,11 +466,10 @@ class AESSAT:
 
     def cipher(self, ptext):
         #print "round[ 0].input: {0}".format(block.encode('hex'))
-        n = 16
         state = list(ptext)
         keys = self.ks_expand()
         state = self.add_round_key(state, keys[0:128])
-        for r in range(1, 10):
+        for r in range(1, options.rounds):
             state = self.sub_bytes(state)
             state = self.shift_rows(state)
             state = self.mix_columns(state)
@@ -699,6 +698,8 @@ if __name__ == "__main__":
                       type=int)
     parser.add_option("--sat", action="store_true", default=False,
                       dest="satisfiable", help="Make the problem SAT by giving the correct key bit values")
+    parser.add_option("--rounds", type=int, default=10,
+                      dest="rounds", help="Number of rounds to run AES")
     (options, args) = parser.parse_args()
 
     if options.sbox_test:
