@@ -747,8 +747,13 @@ if __name__ == "__main__":
 
     if options.print_gmul:
         for i in range(8):
-            print("sbox ", i)
+            print("gmul2 ", i)
             for cl in sbox_gmul2[i]:
+                print(cl)
+
+        for i in range(8):
+            print("gmul3 ", i)
+            for cl in sbox_gmul3[i]:
                 print(cl)
         exit(0)
 
